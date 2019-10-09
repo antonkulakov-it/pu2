@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+	<head>
+		<title>ПУ-2 проверка</title>
+		<meta charset="utf-8">
+		<style>
+			#mainInput~button {
+				display: none;
+			}
+
+			textarea#mainInput:not(:placeholder-shown)~button {
+				display: inline-block;
+			}
+
+			.btn {
+				border-radius: 4px;
+				border: none;
+				box-shadow: 0px 3px 5px 0px rgba(50, 50, 50, 0.75);
+				cursor: pointer;
+				line-height: 1.5em;
+			}
+			.btn:active {
+				border-radius: 4px;
+				border: none;
+				box-shadow: 0px 1px 2px 0px rgba(50, 50, 50, 0.75);
+			}
+			#btnClear {
+				background-color: red;
+			}
+			#btnClear::before {
+				display: inline;
+				content: "\2718";
+			}
+			#btnToTable {
+				background-color: green;
+			}
+			.pu2Table {
+				border: 1px solid gray;
+			}
+			.pu2Table th, .pu2Table td {
+				border: 1px solid lightgray;
+			}
+			.pu2Table tbody tr:nth-of-type(odd) {
+				background-color: antiquewhite;
+			}
+			.pu2Table tbody tr:hover {
+				color: red;
+				outline: 1px solid blue;
+			}
+			#formWrapper>* {
+				vertical-align: top;
+			}
+			#filterInput {
+				width: 50%;
+				min-width: 300px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="formWrapper">
+			<textarea id="mainInput" placeholder="Скопируй текстовые данные сюда:"></textarea>
+			<button class="btn" id="btnToTable">в таблицу</button>
+			<button class="btn" id="btnClear">очистить</button>
+		</div>
+		<div><input id="filterInput" placeholder="Введите фамилию чтобы отфильтровать"></div>
+		<div id="tableWrapper"></div>
+		<script>
+			const labels = {
+				ddoc: "Дата документа:",
+				kv: "Квартал:",
+				unp: "УНП:",
+				plat: "Организация:",
+				year: "Год",
+				ils: "Личный номер",
+				fzl: "Фамилия",
+				izl: "Имя",
+				ozl: "Отчество",
+				dfr1: "Дата приема",
+				npr11: "N приказа о приеме",
+				sovm: "Совместитель",
+				prof2: "Код дожности",
+				kod: "Вид ТД",
+				dto1: "Дата увольнения",
+				koduv1: "основание увольнения",
+				npr12: "N приказа увольнения"
+
+			}
+
+			function throttle(func, ms) {
+				let isThrottled = false;
+				let savedArgs;
+				let savedThis;
+
+				function wrapper() {
+					if (isThrottled) {
+						savedArgs = arguments;
+						savedThis = this;
+						return;
+					}
+					func.apply(this, arguments);
+					isThrottled = true;
+					setTimeout(function() {
+						isThrottled = false; // (3)
+						if (savedArgs) {
+							wrapper.apply(savedThis, savedArgs);
+							savedArgs = savedThis = null;
+						}
+					}, ms);
+				}
+				return wrapper;
+			};
+
+			function parseAndStorePu2(jsonText) {
+				try {
+					const {data, ...meta} = JSON.parse(jsonText);
+					localStorage.meta = JSON.stringify(meta);
+					localStorage.data = JSON.stringify(data);
+				} catch(e) {
+					alert("Ошибка разбора данных");
+				}
+			}
+
+			function refreshTable(element) {
+				tableWrapper.innerHTML = "";
+				if (element) {
+					tableWrapper.appendChild(element);
+				}
+			}
+
+			function renderPu2(meta, data, filterStr) {
+				let result = document.createElement("div");
+				let title = document.createElement("div");
+				title.innerHTML = `${labels.plat} ${meta.plat} ${labels.unp} ${meta.unp} ${labels.kv} ${meta.kv} ${labels.year} ${meta.year}`;
+				result.appendChild(title);
+				let table = document.createElement("table");
+				table.classList.add("pu2Table");
+				let thead = document.createElement("thead");
+				thead.innerHTML = `<tr>
+					<th class="table-th-ils">${labels.ils}</th>
+					<th class="table-th-fzl">${labels.fzl}</th>
+					<th class="table-th-izl">${labels.izl}</th>
+					<th class="table-th-ozl">${labels.ozl}</th>
+					<th class="table-th-dfr1">${labels.dfr1}</th>
+					<th class="table-th-npr11">${labels.npr11}</th>
+					<th class="table-th-sovm">${labels.sovm}</th>
+					<th class="table-th-prof2">${labels.prof2}</th>
+					<th class="table-th-kod">${labels.kod}</th>
+					<th class="table-th-dto1">${labels.dto1}</th>
+					<th class="table-th-koduv1">${labels.koduv1}</th>
+					<th class="table-th-npr12">${labels.npr12}</th>
+				</tr>`;
+				table.appendChild(thead);
+				result.appendChild(table);
+				let tbody = document.createElement("tbody");
+				const tableRows = data.filter((item) => {
+					if (filterStr) {
+						return (item.fzl.toLowerCase().indexOf(filterStr.trim().toLowerCase())>-1);
+					}
+					return true;
+				}).sort((a, b) => {
+					if (a.fzl > b.fzl) {
+						return 1;
+					}
+					if (a.fzl < b.fzl) {
+						return -1;
+					}
+					return 0;
+				}).map((item) => {
+					return `<tr>
+						<td class="table-td-ils">${item.ils}</td>
+						<td class="table-td-fzl">${item.fzl}</td>
+						<td class="table-td-izl">${item.izl}</td>
+						<td class="table-td-ozl">${item.ozl}</td>
+						<td class="table-td-dfr1">${item.r1?(item.r1[0].dfr1?item.r1[0].dfr1:""):""}</td>
+						<td class="table-td-npr11">${item.r1?(item.r1[0].npr11?item.r1[0].npr11:""):""}</td>
+						<td class="table-td-sovm">${item.r1?(item.r1[0].sovm?item.r1[0].sovm:""):""}</td>
+						<td class="table-td-prof2">${item.r2?(item.r2[0].prof2?item.r2[0].prof2:""):""}</td>
+						<td class="table-td-kod">${item.r2?(item.r2[0].kod?item.r2[0].kod:""):""}</td>
+						<td class="table-td-dto1">${item.r1?(item.r1[0].dto1?item.r1[0].dto1:""):""}</td>
+						<td class="table-td-koduv1">${item.r1?(item.r1[0].koduv1?item.r1[0].koduv1:""):""}</td>
+						<td class="table-td-npr12">${item.r1?(item.r1[0].npr12?item.r1[0].npr12:""):""}</td>
+					</tr>`;
+				});
+				tbody.innerHTML = tableRows.join("");
+				table.appendChild(tbody);
+				return result;
+			}
+
+			formWrapper.addEventListener("click", (e)=>{
+				if (e.target === btnToTable) {
+					parseAndStorePu2(mainInput.value);
+					refreshTable(renderPu2(JSON.parse(localStorage.meta), JSON.parse(localStorage.data)));
+				}
+				if (e.target === btnClear) {
+					mainInput.value = "";
+					localStorage.clear();
+					filterInput.value = "";
+					refreshTable();
+				}
+			});
+
+			if (localStorage.meta && localStorage.data) {
+				let meta = JSON.parse(localStorage.meta);
+				let data = JSON.parse(localStorage.data);
+				let inputValue = meta;
+				inputValue.data = data;
+				mainInput.value = JSON.stringify(inputValue);
+				refreshTable(renderPu2(meta, data));
+			}
+
+			document.addEventListener("input", throttle((e) => {
+				if (e.target === filterInput) {
+					refreshTable(renderPu2(JSON.parse(localStorage.meta), JSON.parse(localStorage.data), filterInput.value));
+				}
+			}, 300));
+		</script>
+	</body>
+</html>
